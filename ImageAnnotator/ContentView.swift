@@ -43,7 +43,6 @@ struct ContentView: View {
                 if (manager.calques[index].estVisible ?? true) {
                     switch manager.calques[index].contenu {
                     case .fleche, .dessin:
-                        // Correction syntaxe ici : Le binding se fait via le manager directement
                         ElementCalqueView(calque: $manager.calques[index])
                         
                     default:
@@ -150,7 +149,6 @@ struct ContentView: View {
                     }
                 }
             }
-            .focusedSceneValue(\.undoManager, undoManager)
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DeclencherImport"))) { _ in
                 importerUneImage()
             }
@@ -162,6 +160,15 @@ struct ContentView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnregistrerProjet"))) { _ in
                 sauvegarderProjet()
+            }
+            .onCommand(#selector(NSText.copy(_:))) {
+                copierCalqueSelectionne()
+            }
+            .onCommand(#selector(NSText.paste(_:))) {
+                collerCalque()
+            }
+            .onCommand(#selector(NSText.cut(_:))) {
+                couperCalqueSelectionne()
             }
         }
     }
@@ -216,7 +223,25 @@ struct ContentView: View {
         let renderer = ImageRenderer(content: zonedeDessin)
         renderer.scale = 2.0
         
+        let indexArrierePlan = manager.calques.firstIndex(where: { $0.nom == "Arrière-plan" })
+            
+        var arrierePlanEstTransparent = false
+        if let index = indexArrierePlan {
+            if case .transparent = manager.calques[index].contenu {
+                arrierePlanEstTransparent = true
+            }
+        }
+        
+        let visibiliteOrigine = indexArrierePlan != nil ? (manager.calques[indexArrierePlan!].estVisible ?? true) : true
+        
+        if let index = indexArrierePlan, arrierePlanEstTransparent {
+            manager.calques[index].estVisible = false
+        }
+        
         if let nsImage = renderer.nsImage {
+            if let index = indexArrierePlan, arrierePlanEstTransparent {
+                manager.calques[index].estVisible = visibiliteOrigine
+            }
             let savePanel = NSSavePanel()
             savePanel.allowedContentTypes = [.png]
             savePanel.nameFieldStringValue = "mon_annotation.png"
@@ -227,6 +252,10 @@ struct ContentView: View {
                    let pngData = bitmapRep.representation(using: .png, properties: [:]) {
                     try? pngData.write(to: url)
                 }
+            }
+        } else {
+            if let index = indexArrierePlan, arrierePlanEstTransparent {
+                manager.calques[index].estVisible = visibiliteOrigine
             }
         }
     }
@@ -255,5 +284,66 @@ struct ContentView: View {
                 self.projetInitialise = true
             }
         }
+    }
+    
+    @State private var calquePressePapier: Calque? = nil
+    
+    private func supprimerCalqueSelectionne() {
+        guard let index = indexCalqueSelectionne, manager.calques.indices.contains(index) else { return }
+        if let undoManager = undoManager {
+            let etatActuel = manager.calques
+            undoManager.registerUndo(withTarget: undoManager) { _ in
+                manager.calques = etatActuel
+            }
+        }
+        manager.calques.remove(at: index)
+    }
+
+    private func copierCalqueSelectionne() {
+        guard let index = indexCalqueSelectionne, manager.calques.indices.contains(index) else { return }
+        
+        if let data = try? JSONEncoder().encode(manager.calques[index]),
+           let copieCalque = try? JSONDecoder().decode(Calque.self, from: data) {
+            self.calquePressePapier = copieCalque
+        }
+    }
+
+    private func collerCalque() {
+        guard let calqueAColler = calquePressePapier else { return }
+        
+        if let data = try? JSONEncoder().encode(calqueAColler),
+           var nouveauCalque = try? JSONDecoder().decode(Calque.self, from: data) {
+            
+            nouveauCalque.x += 20
+            nouveauCalque.y += 20
+            nouveauCalque.nom += " (Copie)"
+            nouveauCalque.id = UUID()
+            
+            if let undoManager = undoManager {
+                let etatActuel = manager.calques
+                undoManager.registerUndo(withTarget: undoManager) { _ in
+                    manager.calques = etatActuel
+                }
+            }
+            
+            manager.calques.append(nouveauCalque)
+            indexCalqueSelectionne = manager.calques.count - 1
+        }
+    }
+
+    private func couperCalqueSelectionne() {
+        copierCalqueSelectionne()
+        
+        guard let index = indexCalqueSelectionne, manager.calques.indices.contains(index) else { return }
+        
+        if let undoManager = undoManager {
+            let etatActuel = manager.calques
+            undoManager.registerUndo(withTarget: undoManager) { _ in
+                manager.calques = etatActuel
+            }
+        }
+        
+        manager.calques.remove(at: index)
+        indexCalqueSelectionne = nil
     }
 }

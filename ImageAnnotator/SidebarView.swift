@@ -146,6 +146,7 @@ struct SidebarView: View {
             }
             .buttonStyle(.borderless)
             .foregroundColor(.red)
+            .keyboardShortcut(KeyEquivalent.delete)
             
             Button(action: {
                 indexSelectionne = index

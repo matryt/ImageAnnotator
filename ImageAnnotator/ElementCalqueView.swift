@@ -4,7 +4,7 @@ struct ElementCalqueView: View {
     @Binding var calque: Calque
     @State private var estEnEdition: Bool = false
     
-    @FocusedValue(\.undoManager) var undoManager: UndoManager?
+    @Environment(\.undoManager) var undoManager
     
     var body: some View {
         ZStack {
