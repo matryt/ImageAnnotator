@@ -1,133 +1,79 @@
+//
+//  ContentView.swift
+//  ImageAnnotator
+//
+//  Created by Mathieu CUVELIER on 07/06/2026.
+//
+
 import SwiftUI
 import UniformTypeIdentifiers
 import Combine
 
-@MainActor
-class ProjetManager: ObservableObject {
-    @Published var calques: [Calque] = []
-    
-    func enregistrerEtatPourUndo(undoManager: UndoManager?, ancienEtat: [Calque]) {
-        guard let undoManager = undoManager else { return }
-        
-        undoManager.registerUndo(withTarget: self) { manager in
-            let etatActuel = manager.calques
-            manager.enregistrerEtatPourUndo(undoManager: undoManager, ancienEtat: etatActuel)
-            manager.calques = ancienEtat
-        }
-    }
-}
-
 struct ContentView: View {
-    @StateObject private var manager = ProjetManager()
+    @StateObject private var manager = ProjectManager()
     @Environment(\.undoManager) var undoManager
     
     @State private var startX: CGFloat = 0
     @State private var startY: CGFloat = 0
     
-    @State private var indexCalqueSelectionne: Int? = nil
+    @State private var selectedLayerIndex: Int? = nil
     
-    @State private var largeurCanevas: Double = 800
-    @State private var hauteurCanevas: Double = 600
-    @State private var couleurFond: Color = .white
-    @State private var fondTransparent = false
-    @State private var projetInitialise: Bool = false
-    
-    private func enregistrerEtatPourUndo(ancienEtat: [Calque]) {
-        manager.enregistrerEtatPourUndo(undoManager: undoManager, ancienEtat: ancienEtat)
-    }
-    
-    var zonedeDessin: some View {
-        ZStack {
-            // On boucle directement sur le manager
-            ForEach(manager.calques.indices, id: \.self) { index in
-                if (manager.calques[index].estVisible ?? true) {
-                    switch manager.calques[index].contenu {
-                    case .fleche, .dessin:
-                        ElementCalqueView(calque: $manager.calques[index])
-                        
-                    default:
-                        ElementCalqueView(calque: $manager.calques[index])
-                            .position(x: manager.calques[index].x, y: manager.calques[index].y)
-                            .gesture(
-                                DragGesture()
-                                    .onChanged { gesture in
-                                        if startX == 0 && startY == 0 {
-                                            // Enregistrement de l'historique au premier clic
-                                            enregistrerEtatPourUndo(ancienEtat: manager.calques)
-                                            startX = manager.calques[index].x
-                                            startY = manager.calques[index].y
-                                        }
-                                        
-                                        let limiteX = manager.calques.first?.largeur ?? CGFloat(largeurCanevas)
-                                        let limiteY = manager.calques.first?.hauteur ?? CGFloat(hauteurCanevas)
-                                        
-                                        let cibleX = startX + gesture.translation.width
-                                        let cibleY = startY + gesture.translation.height
-                                        
-                                        // On modifie l'objet en direct sans passer par un $
-                                        manager.calques[index].x = max(0, min(cibleX, limiteX))
-                                        manager.calques[index].y = max(0, min(cibleY, limiteY))
-                                    }
-                                    .onEnded { _ in
-                                        startX = 0
-                                        startY = 0
-                                    }
-                            )
-                    }
-                }
-            }
-        }
-        .frame(
-            width: manager.calques.first?.largeur ?? CGFloat(largeurCanevas),
-            height: manager.calques.first?.hauteur ?? CGFloat(hauteurCanevas)
-        )
-        .background(manager.calques.first?.nom == "Arrière-plan" ? Color.clear : Color.white)
-        .clipped()
-    }
+    @State private var canvasWidth: Double = 800
+    @State private var canvasHeight: Double = 600
+    @State private var backgroundColor: Color = .white
+    @State private var isTransparentBackground = false
+    @State private var isProjectInitialized: Bool = false
     
     var body: some View {
-        if !projetInitialise {
+        if !isProjectInitialized {
+            // --- WELCOME & SETUP INITIAL VIEW ---
             VStack(spacing: 20) {
                 Text("Créer un nouveau canevas")
                     .font(.title)
                     .bold()
                 
                 Form {
-                    TextField("Largeur (px) :", value: $largeurCanevas, format: .number)
-                    TextField("Hauteur (px) :", value: $hauteurCanevas, format: .number)
+                    TextField("Largeur (px) :", value: $canvasWidth, format: .number)
+                    TextField("Hauteur (px) :", value: $canvasHeight, format: .number)
                     
-                    Toggle("Fond transparent", isOn: $fondTransparent)
+                    Toggle("Fond transparent", isOn: $isTransparentBackground)
                     
-                    if !fondTransparent {
-                        ColorPicker("Couleur de fond :", selection: $couleurFond)
+                    if !isTransparentBackground {
+                        ColorPicker("Couleur de fond :", selection: $backgroundColor)
                     }
                 }
                 .frame(width: 300)
                 
                 Button("Créer le canevas") {
-                    let calqueFond: Calque
-                    if fondTransparent {
-                        calqueFond = Calque(nom: "Arrière-plan", x: CGFloat(largeurCanevas / 2), y: CGFloat(hauteurCanevas / 2), largeur: CGFloat(largeurCanevas), hauteur: CGFloat(hauteurCanevas), contenu: .transparent(val: true))
+                    let backgroundLayer: Layer
+                    if isTransparentBackground {
+                        backgroundLayer = Layer(name: "Arrière-plan", x: CGFloat(canvasWidth / 2), y: CGFloat(canvasHeight / 2), width: CGFloat(canvasWidth), height: CGFloat(canvasHeight), content: .transparent(val: true))
                     } else {
-                        calqueFond = Calque(
-                            nom: "Arrière-plan",
-                            x: CGFloat(largeurCanevas / 2),
-                            y: CGFloat(hauteurCanevas / 2),
-                            largeur: CGFloat(largeurCanevas),
-                            hauteur: CGFloat(hauteurCanevas),
-                            contenu: .rectangle(couleur: CodableColor(couleurFond))
+                        backgroundLayer = Layer(
+                            name: "Arrière-plan",
+                            x: CGFloat(canvasWidth / 2),
+                            y: CGFloat(canvasHeight / 2),
+                            width: CGFloat(canvasWidth),
+                            height: CGFloat(canvasHeight),
+                            content: .rectangle(color: CodableColor(backgroundColor))
                         )
                     }
                     
-                    enregistrerEtatPourUndo(ancienEtat: manager.calques)
-                    manager.calques.append(calqueFond)
-                    projetInitialise = true
+                    manager.registerStateForUndo(undoManager: undoManager, previousState: manager.layers)
+                    manager.layers.append(backgroundLayer)
+                    isProjectInitialized = true
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 
                 Button("Ouvrir un projet existant") {
-                    chargerProjet()
+                    loadProject()
+                }
+                .buttonStyle(.borderless)
+                .padding(.top, 5)
+                
+                Button("Ouvrir une image existante") {
+                    openImageDirectly()
                 }
                 .buttonStyle(.borderless)
                 .padding(.top, 5)
@@ -135,45 +81,58 @@ struct ContentView: View {
             .frame(minWidth: 500, minHeight: 400)
             
         } else {
+            // --- MAIN EDITOR WORKSPACE VIEW ---
             HStack(spacing: 0) {
-                // Modifié ici pour passer le binding du manager
-                SidebarView(calques: $manager.calques, indexSelectionne: $indexCalqueSelectionne)
+                SidebarView(layers: $manager.layers, selectedIndex: $selectedLayerIndex)
                 
                 Divider()
                 
                 GeometryReader { geometry in
                     ZStack {
                         Color(nsColor: .windowBackgroundColor)
-                        zonedeDessin
-                            .shadow(radius: 8)
+                        
+                        // Render extracted modular canvas view
+                        DrawingCanvasView(
+                            manager: manager,
+                            undoManager: undoManager,
+                            startX: $startX,
+                            startY: $startY,
+                            canvasWidth: canvasWidth,
+                            canvasHeight: canvasHeight
+                        )
+                        .shadow(radius: 8)
                     }
                 }
             }
+            // Application system notification events listeners
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DeclencherImport"))) { _ in
-                importerUneImage()
+                importImage()
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DeclencherExport"))) { _ in
-                exporterImage()
+                exportImage()
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OuvrirProjet"))) { _ in
-                chargerProjet()
+                loadProject()
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnregistrerProjet"))) { _ in
-                sauvegarderProjet()
+                saveProject()
             }
+            // Core First Responder Menu Actions Hooks
             .onCommand(#selector(NSText.copy(_:))) {
-                copierCalqueSelectionne()
+                copySelectedLayer()
             }
             .onCommand(#selector(NSText.paste(_:))) {
-                collerCalque()
+                pasteLayer()
             }
             .onCommand(#selector(NSText.cut(_:))) {
-                couperCalqueSelectionne()
+                cutSelectedLayer()
             }
         }
     }
 
-    private func importerUneImage() {
+    // --- ASYNC & FILE MANAGEMENT LOGIC METHOD EXTRACTIONS ---
+    
+    private func importImage() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
@@ -182,65 +141,75 @@ struct ContentView: View {
         if panel.runModal() == .OK, let url = panel.url {
             if let bookmarkData = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
                 
-                var largeurInitiale: CGFloat = 300
-                var hauteurInitiale: CGFloat = 200
+                var initialWidth: CGFloat = 300
+                var initialHeight: CGFloat = 200
                 var ratio: CGFloat = 1.5
                 
                 if let nsImage = NSImage(contentsOf: url) {
-                    largeurInitiale = nsImage.size.width
-                    hauteurInitiale = nsImage.size.height
-                    if hauteurInitiale > 0 {
-                        ratio = largeurInitiale / hauteurInitiale
+                    initialWidth = nsImage.size.width
+                    initialHeight = nsImage.size.height
+                    if initialHeight > 0 {
+                        ratio = initialWidth / initialHeight
                     }
                 }
                 
-                let tailleProjetActuelle = manager.calques.first?.largeur ?? CGFloat(largeurCanevas)
-                let limiteMaxCanevas = tailleProjetActuelle * 0.7
+                let currentProjectWidth = manager.layers.first?.width ?? CGFloat(canvasWidth)
+                let maxCanvasLimit = currentProjectWidth * 0.7
                 
-                if largeurInitiale > limiteMaxCanevas {
-                    largeurInitiale = limiteMaxCanevas
-                    hauteurInitiale = largeurInitiale / ratio
+                if initialWidth > maxCanvasLimit {
+                    initialWidth = maxCanvasLimit
+                    initialHeight = initialWidth / ratio
                 }
                 
-                let centreX = (manager.calques.first?.largeur ?? CGFloat(largeurCanevas)) / 2
-                let centreY = (manager.calques.first?.hauteur ?? CGFloat(hauteurCanevas)) / 2
+                let centerX = (manager.layers.first?.width ?? CGFloat(canvasWidth)) / 2
+                let centerY = (manager.layers.first?.height ?? CGFloat(canvasHeight)) / 2
                 
-                enregistrerEtatPourUndo(ancienEtat: manager.calques)
-                manager.calques.append(Calque(
-                    nom: url.lastPathComponent,
-                    x: centreX,
-                    y: centreY,
-                    largeur: largeurInitiale,
-                    hauteur: hauteurInitiale,
-                    contenu: .image(data: bookmarkData, ratio: ratio)
+                manager.registerStateForUndo(undoManager: undoManager, previousState: manager.layers)
+                manager.layers.append(Layer(
+                    name: url.lastPathComponent,
+                    x: centerX,
+                    y: centerY,
+                    width: initialWidth,
+                    height: initialHeight,
+                    content: .image(data: bookmarkData, ratio: ratio)
                 ))
             }
         }
     }
     
     @MainActor
-    private func exporterImage() {
-        let renderer = ImageRenderer(content: zonedeDessin)
+    private func exportImage() {
+        // Render current canvas dynamically without modifying source components
+        let drawingCanvas = DrawingCanvasView(
+            manager: manager,
+            undoManager: undoManager,
+            startX: $startX,
+            startY: $startY,
+            canvasWidth: canvasWidth,
+            canvasHeight: canvasHeight
+        )
+        
+        let renderer = ImageRenderer(content: drawingCanvas)
         renderer.scale = 2.0
         
-        let indexArrierePlan = manager.calques.firstIndex(where: { $0.nom == "Arrière-plan" })
-            
-        var arrierePlanEstTransparent = false
-        if let index = indexArrierePlan {
-            if case .transparent = manager.calques[index].contenu {
-                arrierePlanEstTransparent = true
+        let backgroundLayerIndex = manager.layers.firstIndex(where: { $0.name == "Arrière-plan" })
+        var isBackgroundTransparent = false
+        
+        if let index = backgroundLayerIndex {
+            if case .transparent = manager.layers[index].content {
+                isBackgroundTransparent = true
             }
         }
         
-        let visibiliteOrigine = indexArrierePlan != nil ? (manager.calques[indexArrierePlan!].estVisible ?? true) : true
+        let originalVisibility = backgroundLayerIndex != nil ? (manager.layers[backgroundLayerIndex!].isVisible ?? true) : true
         
-        if let index = indexArrierePlan, arrierePlanEstTransparent {
-            manager.calques[index].estVisible = false
+        if let index = backgroundLayerIndex, isBackgroundTransparent {
+            manager.layers[index].isVisible = false
         }
         
         if let nsImage = renderer.nsImage {
-            if let index = indexArrierePlan, arrierePlanEstTransparent {
-                manager.calques[index].estVisible = visibiliteOrigine
+            if let index = backgroundLayerIndex, isBackgroundTransparent {
+                manager.layers[index].isVisible = originalVisibility
             }
             let savePanel = NSSavePanel()
             savePanel.allowedContentTypes = [.png]
@@ -254,96 +223,128 @@ struct ContentView: View {
                 }
             }
         } else {
-            if let index = indexArrierePlan, arrierePlanEstTransparent {
-                manager.calques[index].estVisible = visibiliteOrigine
+            if let index = backgroundLayerIndex, isBackgroundTransparent {
+                manager.layers[index].isVisible = originalVisibility
             }
         }
     }
     
-    private func sauvegarderProjet() {
+    private func saveProject() {
         let savePanel = NSSavePanel()
         savePanel.allowedContentTypes = [.json]
         savePanel.nameFieldStringValue = "mon_projet.json"
         
         if savePanel.runModal() == .OK, let url = savePanel.url {
-            if let data = try? JSONEncoder().encode(manager.calques) {
+            if let data = try? JSONEncoder().encode(manager.layers) {
                 try? data.write(to: url)
             }
         }
     }
 
-    private func chargerProjet() {
+    private func loadProject() {
         let openPanel = NSOpenPanel()
         openPanel.allowedContentTypes = [.json]
         openPanel.allowsMultipleSelection = false
         
         if openPanel.runModal() == .OK, let url = openPanel.url {
             if let data = try? Data(contentsOf: url),
-               let calquesCharges = try? JSONDecoder().decode([Calque].self, from: data) {
-                self.manager.calques = calquesCharges
-                self.projetInitialise = true
+               let loadedLayers = try? JSONDecoder().decode([Layer].self, from: data) {
+                self.manager.layers = loadedLayers
+                self.isProjectInitialized = true
             }
         }
     }
     
-    @State private var calquePressePapier: Calque? = nil
-    
-    private func supprimerCalqueSelectionne() {
-        guard let index = indexCalqueSelectionne, manager.calques.indices.contains(index) else { return }
-        if let undoManager = undoManager {
-            let etatActuel = manager.calques
-            undoManager.registerUndo(withTarget: undoManager) { _ in
-                manager.calques = etatActuel
+    private func openImageDirectly() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.image]
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            if let bookmarkData = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
+                
+                var initialWidth: CGFloat = 800
+                var initialHeight: CGFloat = 600
+                var ratio: CGFloat = 1.33
+                
+                if let nsImage = NSImage(contentsOf: url) {
+                    initialWidth = nsImage.size.width
+                    initialHeight = nsImage.size.height
+                    if initialHeight > 0 {
+                        ratio = initialWidth / initialHeight
+                    }
+                }
+                
+                self.canvasWidth = Double(initialWidth)
+                self.canvasHeight = Double(initialHeight)
+                
+                let backgroundImageLayer = Layer(
+                    name: "Arrière-plan",
+                    x: initialWidth / 2,
+                    y: initialHeight / 2,
+                    width: initialWidth,
+                    height: initialHeight,
+                    content: .image(data: bookmarkData, ratio: ratio)
+                )
+                
+                if let undoManager = undoManager {
+                    undoManager.removeAllActions()
+                }
+                
+                manager.layers = [backgroundImageLayer]
+                self.isProjectInitialized = true
             }
         }
-        manager.calques.remove(at: index)
     }
+    
+    // --- EDITIONS AND REPLICATION CLIPBOARD FEATURES ---
 
-    private func copierCalqueSelectionne() {
-        guard let index = indexCalqueSelectionne, manager.calques.indices.contains(index) else { return }
+    private func copySelectedLayer() {
+        guard let index = selectedLayerIndex, manager.layers.indices.contains(index) else { return }
         
-        if let data = try? JSONEncoder().encode(manager.calques[index]),
-           let copieCalque = try? JSONDecoder().decode(Calque.self, from: data) {
-            self.calquePressePapier = copieCalque
+        if let data = try? JSONEncoder().encode(manager.layers[index]),
+           let layerCopy = try? JSONDecoder().decode(Layer.self, from: data) {
+            manager.clipboardLayer = layerCopy
         }
     }
 
-    private func collerCalque() {
-        guard let calqueAColler = calquePressePapier else { return }
+    private func pasteLayer() {
+        guard let layerToPaste = manager.clipboardLayer else { return }
         
-        if let data = try? JSONEncoder().encode(calqueAColler),
-           var nouveauCalque = try? JSONDecoder().decode(Calque.self, from: data) {
+        if let data = try? JSONEncoder().encode(layerToPaste),
+           var newLayer = try? JSONDecoder().decode(Layer.self, from: data) {
             
-            nouveauCalque.x += 20
-            nouveauCalque.y += 20
-            nouveauCalque.nom += " (Copie)"
-            nouveauCalque.id = UUID()
+            newLayer.x += 20
+            newLayer.y += 20
+            newLayer.name += " (Copie)"
+            newLayer.id = UUID()
             
             if let undoManager = undoManager {
-                let etatActuel = manager.calques
+                let currentState = manager.layers
                 undoManager.registerUndo(withTarget: undoManager) { _ in
-                    manager.calques = etatActuel
+                    manager.layers = currentState
                 }
             }
             
-            manager.calques.append(nouveauCalque)
-            indexCalqueSelectionne = manager.calques.count - 1
+            manager.layers.append(newLayer)
+            selectedLayerIndex = manager.layers.count - 1
         }
     }
 
-    private func couperCalqueSelectionne() {
-        copierCalqueSelectionne()
+    private func cutSelectedLayer() {
+        copySelectedLayer()
         
-        guard let index = indexCalqueSelectionne, manager.calques.indices.contains(index) else { return }
+        guard let index = selectedLayerIndex, manager.layers.indices.contains(index) else { return }
         
         if let undoManager = undoManager {
-            let etatActuel = manager.calques
+            let currentState = manager.layers
             undoManager.registerUndo(withTarget: undoManager) { _ in
-                manager.calques = etatActuel
+                manager.layers = currentState
             }
         }
         
-        manager.calques.remove(at: index)
-        indexCalqueSelectionne = nil
+        manager.layers.remove(at: index)
+        selectedLayerIndex = nil
     }
 }
