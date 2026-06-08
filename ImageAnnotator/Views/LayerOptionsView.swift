@@ -71,7 +71,7 @@ struct LayerOptionsView: View {
                     }
                 }
                 
-            case .rectangle(let color):
+            case .rectangle(let color, let isFilled, let strokeThickness):
                 let ratioLockedBinding = Binding<Bool>(
                     get: { layer.width == layer.height },
                     set: { makeSquare in
@@ -81,6 +81,16 @@ struct LayerOptionsView: View {
                             layer.height = layer.width - 1
                         }
                     }
+                )
+                
+                let strokeThicknessBinding = Binding(
+                    get: { strokeThickness },
+                    set: { layer.content = .rectangle(color: color, isFilled: isFilled, strokeThickness: $0) }
+                )
+                
+                let isFilledBinding = Binding(
+                    get: { isFilled },
+                    set: { layer.content = .rectangle(color: color, isFilled: $0, strokeThickness: strokeThickness) }
                 )
                 
                 Section(header: Text("Dimensions du Rectangle").font(.headline)) {
@@ -120,15 +130,23 @@ struct LayerOptionsView: View {
                 let rectColorBinding = Binding<Color>(
                     get: { color.asColor },
                     set: {
-                        layer.content = .rectangle(color: CodableColor($0))
+                        layer.content = .rectangle(color: CodableColor($0), isFilled: isFilled, strokeThickness: strokeThickness)
                     }
                 )
                 
                 Section(header: Text("Style").font(.headline)) {
                     ColorPicker("Couleur du rectangle :", selection: rectColorBinding)
+                    Toggle("Remplir la forme (Pleine)", isOn: isFilledBinding)
+                    
+                    if !isFilled {
+                        HStack {
+                            Text("Épaisseur du contour : \(Int(strokeThickness))px")
+                            Slider(value: strokeThicknessBinding, in: 1...20)
+                        }
+                    }
                 }
 
-            case .circle(let color):
+            case .circle(let color, let isFilled, let strokeThickness):
                 let ratioLockedBinding = Binding<Bool>(
                     get: { layer.width == layer.height },
                     set: { makePerfectCircle in
@@ -177,12 +195,31 @@ struct LayerOptionsView: View {
                 let circleColorBinding = Binding<Color>(
                     get: { color.asColor },
                     set: {
-                        layer.content = .circle(color: CodableColor($0))
+                        layer.content = .circle(color: CodableColor($0), isFilled: isFilled, strokeThickness: strokeThickness)
                     }
+                )
+                
+                let isFilledBinding = Binding<Bool>(
+                    get: { isFilled },
+                    set: { layer.content = .circle(color: color, isFilled: $0, strokeThickness: strokeThickness) }
+                )
+                
+                let thicknessBinding = Binding<CGFloat>(
+                    get: { strokeThickness },
+                    set: { layer.content = .circle(color: color, isFilled: isFilled, strokeThickness: $0) }
                 )
                 
                 Section(header: Text("Style").font(.headline)) {
                     ColorPicker("Couleur du cercle :", selection: circleColorBinding)
+                    
+                    Toggle("Remplir la forme (Pleine)", isOn: isFilledBinding)
+                            
+                    if !isFilled {
+                        HStack {
+                            Text("Épaisseur du contour : \(Int(strokeThickness))px")
+                            Slider(value: thicknessBinding, in: 1...20)
+                        }
+                    }
                 }
                 
             case .arrow(let startPoint, let endPoint, let color, let arrowStyle, let thickness):

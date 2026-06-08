@@ -12,12 +12,12 @@ enum ArrowStyle: String, CaseIterable, Identifiable, Codable {
 
 // 1. Define the unique possible content types
 enum ContentType: Equatable, Hashable, Codable {
-    case rectangle(color: CodableColor)
+    case rectangle(color: CodableColor, isFilled: Bool, strokeThickness: CGFloat)
     case text(text: String, color: CodableColor, size: CGFloat, font: String)
     case image(data: Data, ratio: CGFloat)
     case arrow(start: CGPoint, end: CGPoint, color: CodableColor, style: ArrowStyle, thickness: CGFloat)
     case transparent(val: Bool)
-    case circle(color: CodableColor)
+    case circle(color: CodableColor, isFilled: Bool, strokeThickness: CGFloat)
     case drawing(lines: [[CGPoint]], color: CodableColor, thickness: CGFloat)
 }
 

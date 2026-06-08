@@ -55,7 +55,7 @@ struct ContentView: View {
                             y: CGFloat(canvasHeight / 2),
                             width: CGFloat(canvasWidth),
                             height: CGFloat(canvasHeight),
-                            content: .rectangle(color: CodableColor(backgroundColor))
+                            content: .rectangle(color: CodableColor(backgroundColor), isFilled: true, strokeThickness: 1)
                         )
                     }
                     

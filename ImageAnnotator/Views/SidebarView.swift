@@ -25,7 +25,7 @@ struct SidebarView: View {
             VStack {
                 HStack {
                     Button(action: {
-                        let newRectangle = Layer(name: "Rectangle \(layers.count + 1)", x: 200, y: 200, width: 150, height: 150, content: .rectangle(color: CodableColor(.blue.opacity(0.5))))
+                        let newRectangle = Layer(name: "Rectangle \(layers.count + 1)", x: 200, y: 200, width: 150, height: 150, content: .rectangle(color: CodableColor(.blue.opacity(0.5)), isFilled: true, strokeThickness: 1))
                         registerGlobalStateForUndo()
                         layers.append(newRectangle)
                     }) {
@@ -63,7 +63,7 @@ struct SidebarView: View {
                         let newCircle = Layer(
                             name: "Cercle \(layers.count + 1)",
                             x: 150, y: 150, width: 100, height: 100,
-                            content: .circle(color: CodableColor(.blue))
+                            content: .circle(color: CodableColor(.blue), isFilled: true, strokeThickness: 1)
                         )
                         registerGlobalStateForUndo()
                         layers.append(newCircle)

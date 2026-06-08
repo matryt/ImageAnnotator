@@ -17,11 +17,19 @@ struct LayerElementView: View {
         ZStack {
             switch layer.content {
                 
-            case .rectangle(let color):
-                Rectangle()
-                    .foregroundStyle(color.asColor)
-                    .frame(width: layer.width, height: layer.height)
-                    .opacity(layer.opacity ?? 1)
+            case .rectangle(let color, let isFilled, let strokeThickness):
+                if (isFilled) {
+                    Rectangle()
+                        .foregroundStyle(color.asColor)
+                        .frame(width: layer.width, height: layer.height)
+                        .opacity(layer.opacity ?? 1)
+                } else {
+                    Rectangle()
+                        .stroke(style: StrokeStyle(lineWidth: strokeThickness, lineCap: .round, lineJoin: .round))
+                        .foregroundStyle(color.asColor)
+                        .frame(width: layer.width, height: layer.height)
+                        .opacity(layer.opacity ?? 1)
+                }
                     
             case .text(let textContent, let color, let size, let fontName):
                 if isEditing {
@@ -121,11 +129,19 @@ struct LayerElementView: View {
                     }
                 }
                 
-            case .circle(let color):
-                Ellipse() // Fallback canvas for both uniform regular circles and free anamorphic ovals profiles
-                    .foregroundStyle(color.asColor)
-                    .frame(width: layer.width, height: layer.height)
-                    .opacity(layer.opacity ?? 1)
+            case .circle(let color, let isFilled, let strokeThickness):
+                if (isFilled) {
+                    Ellipse() // Fallback canvas for both uniform regular circles and free anamorphic ovals profiles
+                        .foregroundStyle(color.asColor)
+                        .frame(width: layer.width, height: layer.height)
+                        .opacity(layer.opacity ?? 1)
+                } else {
+                    Ellipse()
+                        .stroke(style: StrokeStyle(lineWidth: strokeThickness, lineCap: .round, lineJoin: .round))
+                        .frame(width: layer.width, height: layer.height)
+                        .foregroundStyle(color.asColor)
+                        .opacity(layer.opacity ?? 1)
+                }
             
             case .drawing(let lines, let color, let thickness):
                 Canvas { context, size in
