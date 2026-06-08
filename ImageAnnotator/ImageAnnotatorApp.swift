@@ -39,6 +39,18 @@ struct ImageAnnotatorApp: App {
                         }
                         .keyboardShortcut("d", modifiers: .command)
                     }
+            
+                    CommandGroup(after: .pasteboard) {
+                            Divider()
+                            
+                            Button("Copier l'image complète") {
+                                NotificationCenter.default.post(
+                                    name: NSNotification.Name("DeclencherCopiePressePapiers"),
+                                    object: nil
+                                )
+                            }
+                            .keyboardShortcut("c", modifiers: [.command, .shift])
+                    }
                 }
     }
 }

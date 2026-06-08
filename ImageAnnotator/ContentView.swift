@@ -117,7 +117,9 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnregistrerProjet"))) { _ in
                 saveProject()
             }
-            // Core First Responder Menu Actions Hooks
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DeclencherCopiePressePapiers"))) { _ in
+                copyImageToClipboard()
+            }
             .onCommand(#selector(NSText.copy(_:))) {
                 copySelectedLayer()
             }
@@ -179,7 +181,6 @@ struct ContentView: View {
     
     @MainActor
     private func exportImage() {
-        // Render current canvas dynamically without modifying source components
         let drawingCanvas = DrawingCanvasView(
             manager: manager,
             undoManager: undoManager,
@@ -187,6 +188,10 @@ struct ContentView: View {
             startY: $startY,
             canvasWidth: canvasWidth,
             canvasHeight: canvasHeight
+        )
+        .frame(
+            width: manager.layers.first?.width ?? CGFloat(canvasWidth),
+            height: manager.layers.first?.height ?? CGFloat(canvasHeight)
         )
         
         let renderer = ImageRenderer(content: drawingCanvas)
@@ -298,7 +303,6 @@ struct ContentView: View {
         }
     }
     
-    // --- EDITIONS AND REPLICATION CLIPBOARD FEATURES ---
 
     private func copySelectedLayer() {
         guard let index = selectedLayerIndex, manager.layers.indices.contains(index) else { return }
@@ -346,5 +350,55 @@ struct ContentView: View {
         
         manager.layers.remove(at: index)
         selectedLayerIndex = nil
+    }
+    
+    @MainActor
+    private func copyImageToClipboard() {
+        // 1. On instancie la vue du canevas pour le rendu
+        let sourceCanvas = DrawingCanvasView(
+            manager: manager,
+            undoManager: undoManager,
+            startX: $startX,
+            startY: $startY,
+            canvasWidth: canvasWidth,
+            canvasHeight: canvasHeight
+        )
+        .frame(
+            width: manager.layers.first?.width ?? CGFloat(canvasWidth),
+            height: manager.layers.first?.height ?? CGFloat(canvasHeight)
+        )
+            
+        let renderer = ImageRenderer(content: sourceCanvas)
+        renderer.scale = 2.0
+        
+        let backgroundLayerIndex = manager.layers.firstIndex(where: { $0.name == "Arrière-plan" })
+        var isBackgroundTransparent = false
+        
+        if let index = backgroundLayerIndex {
+            if case .transparent = manager.layers[index].content {
+                isBackgroundTransparent = true
+            }
+        }
+        
+        let originalVisibility = backgroundLayerIndex != nil ? (manager.layers[backgroundLayerIndex!].isVisible ?? true) : true
+        
+        if let index = backgroundLayerIndex, isBackgroundTransparent {
+            manager.layers[index].isVisible = false
+        }
+        
+        if let nsImage = renderer.nsImage {
+            if let index = backgroundLayerIndex, isBackgroundTransparent {
+                manager.layers[index].isVisible = originalVisibility
+            }
+            
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.writeObjects([nsImage])
+            
+        } else {
+            if let index = backgroundLayerIndex, isBackgroundTransparent {
+                manager.layers[index].isVisible = originalVisibility
+            }
+        }
     }
 }

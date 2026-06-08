@@ -21,7 +21,6 @@ struct SidebarView: View {
                 .font(.headline)
                 .padding(.top)
             
-            // --- CREATION TOOLS BUTTONS ---
             VStack {
                 HStack {
                     Button(action: {
@@ -30,7 +29,7 @@ struct SidebarView: View {
                         layers.append(newRectangle)
                     }) {
                         Image(systemName: "square.dashed")
-                        Text("+ Rectangle")
+                        Text("Rectangle")
                     }
                     
                     Button(action: {
@@ -39,7 +38,7 @@ struct SidebarView: View {
                         layers.append(newText)
                     }) {
                         Image(systemName: "text.alignleft")
-                        Text("+ Texte")
+                        Text("Texte")
                     }
                 }
                 .padding(.horizontal)
@@ -56,7 +55,7 @@ struct SidebarView: View {
                         layers.append(newArrow)
                     }) {
                         Image(systemName: "arrow.up.forward")
-                        Text("+ Flèche")
+                        Text("Flèche")
                     }
                     
                     Button(action: {
@@ -69,7 +68,7 @@ struct SidebarView: View {
                         layers.append(newCircle)
                     }) {
                         Image(systemName: "circle")
-                        Text("+ Cercle")
+                        Text("Cercle")
                     }
                 }
                 
@@ -90,7 +89,7 @@ struct SidebarView: View {
                         layers.append(newDrawing)
                     }) {
                         Image(systemName: "scribble")
-                        Text("+ Dessin libre")
+                        Text("Dessin libre")
                     }
                 }
                 .padding(.horizontal)
@@ -99,7 +98,6 @@ struct SidebarView: View {
             
             Divider()
             
-            // --- LAYERS COLLECTION SIDEBAR LIST ---
             List {
                 ForEach(layers.indices.reversed(), id: \.self) { index in
                     layerRow(for: index)
@@ -121,7 +119,6 @@ struct SidebarView: View {
                         if let undoManager = undoManager {
                             let historyCopy = preSheetConfiguration
                             
-                            // Attach the Undo action target context to NSApp to avoid system automatic cleanup on sheet dismissal
                             undoManager.registerUndo(withTarget: NSApp) { _ in
                                 self.layers = historyCopy
                             }
@@ -133,7 +130,6 @@ struct SidebarView: View {
         .frame(width: 250)
     }
     
-    // --- MODULAR EXTRACTED SUBVIEW CELLS FOR LIGHTWEIGHT TYPE-CHECKING RENDERS ---
     private func layerRow(for index: Int) -> some View {
         HStack {
             Text(layers[index].name)
@@ -184,7 +180,6 @@ struct SidebarView: View {
         }
     }
     
-    // --- LOCAL ACTIONS AND UNDO REGISTRATION CORE HANDLERS ---
     private func registerGlobalStateForUndo() {
         if let undoManager = undoManager {
             let currentState = layers
