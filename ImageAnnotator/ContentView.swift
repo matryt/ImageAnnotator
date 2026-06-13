@@ -24,6 +24,10 @@ struct ContentView: View {
     @State private var isTransparentBackground = false
     @State private var isProjectInitialized: Bool = false
     
+    @State private var zoomScale: CGFloat = 1.0
+    @State private var zoomOffset: CGSize = .zero // Permet de déplacer le canevas quand on est zoomé
+    @State private var dragBaseOffset: CGSize = .zero
+    
     var body: some View {
         if !isProjectInitialized {
             // --- WELCOME & SETUP INITIAL VIEW ---
@@ -101,7 +105,27 @@ struct ContentView: View {
                             startY: $startY
                         )
                         .shadow(radius: 8)
+                        .scaleEffect(zoomScale)
+                        .offset(zoomOffset)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    if NSEvent.modifierFlags.contains(.option) {
+                                        zoomOffset = CGSize(
+                                            width: dragBaseOffset.width + value.translation.width,
+                                            height: dragBaseOffset.height + value.translation.height
+                                        )
+                                    }
+                                }
+                                .onEnded { value in
+                                    if NSEvent.modifierFlags.contains(.option) {
+                                        dragBaseOffset = zoomOffset
+                                    }
+                                }
+                        )
                     }
+                    .contentShape(Rectangle())
+                    .clipped()
                 }
             }
             // Application system notification events listeners
@@ -129,6 +153,25 @@ struct ContentView: View {
             .onCommand(#selector(NSText.cut(_:))) {
                 cutSelectedLayer()
             }
+            .background(
+                HostingWindowFinder { window in
+                    window?.onScrollWheel = { event in
+                        if event.modifierFlags.contains(.command) {
+                            let delta = event.deltaY
+                            let zoomFactor: CGFloat = delta > 0 ? 1.1 : 0.9
+                            
+                            // On applique le zoom en le bridant entre 0.5x et 5.0x pour éviter l'infini
+                            let newScale = max(0.5, min(5.0, zoomScale * zoomFactor))
+                            
+                            withAnimation(.easeOut(duration: 0.1)) {
+                                zoomScale = newScale
+                                // Si on revient à 100%, on recentre le canevas automatiquement
+                                if zoomScale == 1.0 { zoomOffset = .zero }
+                            }
+                        }
+                    }
+                }
+            )
         }
     }
 
@@ -141,7 +184,7 @@ struct ContentView: View {
         panel.allowedContentTypes = [.image]
         
         if panel.runModal() == .OK, let url = panel.url {
-            if let bookmarkData = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
+            if let rawData = try? Data(contentsOf: url) {
                 
                 var initialWidth: CGFloat = 300
                 var initialHeight: CGFloat = 200
@@ -173,7 +216,7 @@ struct ContentView: View {
                     y: centerY,
                     width: initialWidth,
                     height: initialHeight,
-                    content: .image(data: bookmarkData, ratio: ratio)
+                    content: .image(data: rawData, ratio: ratio)
                 ))
             }
         }
@@ -276,7 +319,7 @@ struct ContentView: View {
         panel.allowedContentTypes = [.image]
         
         if panel.runModal() == .OK, let url = panel.url {
-            if let bookmarkData = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
+            if let rawData = try? Data(contentsOf: url) {
                 
                 var initialWidth: CGFloat = 800
                 var initialHeight: CGFloat = 600
@@ -299,7 +342,7 @@ struct ContentView: View {
                     y: initialHeight / 2,
                     width: initialWidth,
                     height: initialHeight,
-                    content: .image(data: bookmarkData, ratio: ratio)
+                    content: .image(data: rawData, ratio: ratio)
                 )
                 
                 if let undoManager = undoManager {
@@ -403,5 +446,41 @@ struct ContentView: View {
                 manager.canvasProject.layers[index].isVisible = originalVisibility
             }
         }
+    }
+}
+
+struct HostingWindowFinder: NSViewRepresentable {
+    var callback: (NSWindow?) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { [weak view] in
+            callback(view?.window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+extension NSWindow {
+    private struct AssociatedKeys {
+        static var onScrollWheel: UInt8 = 0
+    }
+
+    var onScrollWheel: ((NSEvent) -> Void)? {
+        get {
+            objc_getAssociatedObject(self, &AssociatedKeys.onScrollWheel) as? (NSEvent) -> Void
+        }
+        set {
+            objc_setAssociatedObject(self, &AssociatedKeys.onScrollWheel, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        }
+    }
+
+    open override func scrollWheel(with event: NSEvent) {
+        if let block = onScrollWheel {
+            block(event)
+        }
+        super.scrollWheel(with: event)
     }
 }

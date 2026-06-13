@@ -125,8 +125,8 @@ struct LayerElementView: View {
                         }
                 }
                 
-            case .image(let bookmarkData, _):
-                if let nsImage = loadImageFromBookmark(bookmarkData: bookmarkData) {
+            case .image(let data, _):
+                if let nsImage = NSImage(data: data) {
                     let cLeft = layer.cropLeft ?? 0
                     let cRight = layer.cropRight ?? 0
                     let cTop = layer.cropTop ?? 0
