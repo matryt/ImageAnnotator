@@ -17,88 +17,86 @@ struct LayerElementView: View {
     var body: some View {
         ZStack {
             switch layer.content {
-                case .rectangle(let color, let isFilled, let strokeThickness):
-                    ZStack(alignment: .bottomTrailing) {
-                        if isFilled {
-                            Rectangle()
-                                .foregroundStyle(color.asColor)
-                                .frame(width: layer.width, height: layer.height)
-                                .opacity(layer.opacity ?? 1)
-                        } else {
-                            Rectangle()
-                                .stroke(color.asColor, lineWidth: strokeThickness)
-                                .frame(width: layer.width, height: layer.height)
-                                .opacity(layer.opacity ?? 1)
-                        }
-                        
-                        // Si l'utilisateur double-clique pour éditer ou sélectionne le calque
-                        if isEditing {
-                            Circle()
-                                .fill(Color.blue)
-                                .frame(width: 20, height: 20)
-                                .offset(x: 6, y: 6) // Aligne pile sur le coin
-                                .gesture(
-                                    DragGesture()
-                                        .onChanged { value in
-                                            // On calcule la nouvelle taille selon le déplacement de la souris
-                                            let newWidth = max(20, layer.width + value.translation.width)
-                                            let newHeight = max(20, layer.height + value.translation.height)
-                                            
-                                            // Si c'est un carré parfait (largeur == hauteur), on applique la même valeur
-                                            if layer.width == layer.height {
-                                                layer.width = newWidth
-                                                layer.height = newWidth
-                                            } else {
-                                                layer.width = newWidth
-                                                layer.height = newHeight
-                                            }
-                                        }
-                                )
-                        }
+            case .rectangle(let color, let isFilled, let strokeThickness):
+                ZStack(alignment: .bottomTrailing) {
+                    if isFilled {
+                        Rectangle()
+                            .foregroundStyle(color.asColor)
+                            .frame(width: layer.width, height: layer.height)
+                            .opacity(layer.opacity ?? 1)
+                    } else {
+                        Rectangle()
+                            .stroke(color.asColor, lineWidth: strokeThickness)
+                            .frame(width: layer.width, height: layer.height)
+                            .opacity(layer.opacity ?? 1)
                     }
-                    // Un simple clic ou double-clic active les poignées de modification
-                    .contentShape(Rectangle())
-                    .onTapGesture { isEditing.toggle() }
                     
-                case .circle(let color, let isFilled, let strokeThickness):
-                    ZStack(alignment: .bottomTrailing) {
-                        if isFilled {
-                            Ellipse()
-                                .foregroundStyle(color.asColor)
-                                .frame(width: layer.width, height: layer.height)
-                                .opacity(layer.opacity ?? 1)
-                        } else {
-                            Ellipse()
-                                .stroke(color.asColor, lineWidth: strokeThickness)
-                                .frame(width: layer.width, height: layer.height)
-                                .opacity(layer.opacity ?? 1)
-                        }
-                        
-                        if isEditing {
-                            Circle()
-                                .fill(Color.blue)
-                                .frame(width: 20, height: 20)
-                                .offset(x: 6, y: 6)
-                                .gesture(
-                                    DragGesture()
-                                        .onChanged { value in
-                                            let newWidth = max(20, layer.width + value.translation.width)
-                                            let newHeight = max(20, layer.height + value.translation.height)
-                                            
-                                            if layer.width == layer.height {
-                                                layer.width = newWidth
-                                                layer.height = newWidth
-                                            } else {
-                                                layer.width = newWidth
-                                                layer.height = newHeight
-                                            }
+                    if isEditing {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 20, height: 20)
+                            .offset(x: 6, y: 6) // Aligne pile sur le coin
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        // On calcule la nouvelle taille selon le déplacement de la souris
+                                        let newWidth = max(20, layer.width + value.translation.width)
+                                        let newHeight = max(20, layer.height + value.translation.height)
+                                        
+                                        // Si c'est un carré parfait (largeur == hauteur), on applique la même valeur
+                                        if layer.width == layer.height {
+                                            layer.width = newWidth
+                                            layer.height = newWidth
+                                        } else {
+                                            layer.width = newWidth
+                                            layer.height = newHeight
                                         }
-                                )
-                        }
+                                    }
+                            )
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture { isEditing.toggle() }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { isEditing.toggle() }
+                
+            case .circle(let color, let isFilled, let strokeThickness):
+                ZStack(alignment: .bottomTrailing) {
+                    if isFilled {
+                        Ellipse()
+                            .foregroundStyle(color.asColor)
+                            .frame(width: layer.width, height: layer.height)
+                            .opacity(layer.opacity ?? 1)
+                    } else {
+                        Ellipse()
+                            .stroke(color.asColor, lineWidth: strokeThickness)
+                            .frame(width: layer.width, height: layer.height)
+                            .opacity(layer.opacity ?? 1)
+                    }
                     
+                    if isEditing {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 20, height: 20)
+                            .offset(x: 6, y: 6)
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        let newWidth = max(20, layer.width + value.translation.width)
+                                        let newHeight = max(20, layer.height + value.translation.height)
+                                        
+                                        if layer.width == layer.height {
+                                            layer.width = newWidth
+                                            layer.height = newWidth
+                                        } else {
+                                            layer.width = newWidth
+                                            layer.height = newHeight
+                                        }
+                                    }
+                            )
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { isEditing.toggle() }
+                
             case .text(let textContent, let color, let size, let fontName):
                 if isEditing {
                     // 1. Dynamically create a runtime Binding for the text field input stream mapping
@@ -122,7 +120,6 @@ struct LayerElementView: View {
                         .font(.custom(fontName, size: size))
                         .foregroundStyle(color.asColor)
                         .opacity(layer.opacity ?? 1)
-                        // Capture double-tap gesture mapping hook sequence to trigger inline edit mode
                         .onTapGesture(count: 2) {
                             isEditing = true
                         }
@@ -138,9 +135,7 @@ struct LayerElementView: View {
                     Image(nsImage: nsImage)
                         .resizable()
                         .scaledToFill()
-                        // Offset internal texture mapping coordinates bounds context
                         .offset(x: (cRight - cLeft) / 2, y: (cBottom - cTop) / 2)
-                        // Apply layout frames properties computed safely from the layer properties
                         .frame(width: layer.width, height: layer.height)
                         .clipped()
                         .opacity(layer.opacity ?? 1)
@@ -148,7 +143,6 @@ struct LayerElementView: View {
                 
             case .arrow(let startPoint, let endPoint, let color, let style, let thickness):
                 ZStack {
-                    // 1. Render vector arrow lines path
                     ArrowShape(
                         start: CGPoint(x: startPoint.x + dragOffset.width, y: startPoint.y + dragOffset.height),
                         end:   CGPoint(x: endPoint.x   + dragOffset.width, y: endPoint.y   + dragOffset.height),
@@ -156,102 +150,79 @@ struct LayerElementView: View {
                         thickness: thickness
                     )
                     .stroke(color.asColor, style: StrokeStyle(lineWidth: thickness, lineCap: .round, lineJoin: .round))
-                    .contentShape(Rectangle())
+                    .contentShape(StrokeShape(path: ArrowShape(start: startPoint, end: endPoint, arrowStyle: style, thickness: thickness).path(in: .zero), lineWidth: thickness + 15))
                     .gesture(
                         DragGesture()
                             .onChanged { value in
-                                dragOffset = value.translation  // offset visuel uniquement
+                                dragOffset = value.translation
                             }
                             .onEnded { value in
-                                // Commit définitif une seule fois
-                                let finalStart = CGPoint(x: startPoint.x + value.translation.width,
-                                                        y: startPoint.y + value.translation.height)
-                                let finalEnd   = CGPoint(x: endPoint.x   + value.translation.width,
-                                                        y: endPoint.y   + value.translation.height)
-                                layer.content = .arrow(start: finalStart, end: finalEnd,
-                                                       color: color, style: style, thickness: thickness)
+                                let finalStart = CGPoint(x: startPoint.x + value.translation.width, y: startPoint.y + value.translation.height)
+                                let finalEnd   = CGPoint(x: endPoint.x   + value.translation.width, y: endPoint.y   + value.translation.height)
+                                layer.content = .arrow(start: finalStart, end: finalEnd, color: color, style: style, thickness: thickness)
                                 dragOffset = .zero
                             }
                     )
                     .onTapGesture { isEditing.toggle() }
-
-                    // 2. Handles de contrôle (aussi décalés pendant le drag)
+    
                     if isEditing {
                         Circle()
                             .fill(Color.blue)
                             .frame(width: 12, height: 12)
-                            .position(CGPoint(x: startPoint.x + dragOffset.width,
-                                              y: startPoint.y + dragOffset.height))
+                            .position(CGPoint(x: startPoint.x + dragOffset.width, y: startPoint.y + dragOffset.height))
                             .gesture(
                                 DragGesture()
                                     .onChanged { value in
                                         let shiftHeld = NSEvent.modifierFlags.contains(.shift)
-                                        let newStart = shiftHeld
-                                            ? snapToRemarkableAngle(from: endPoint, to: value.location)
-                                            : value.location
-                                        layer.content = .arrow(start: newStart, end: endPoint,
-                                                               color: color, style: style, thickness: thickness)
+                                        let newStart = shiftHeld ? snapToRemarkableAngle(from: endPoint, to: value.location) : value.location
+                                        layer.content = .arrow(start: newStart, end: endPoint, color: color, style: style, thickness: thickness)
                                     }
                             )
-
+                        
                         Circle()
                             .fill(Color.blue)
                             .frame(width: 12, height: 12)
-                            .position(CGPoint(x: endPoint.x + dragOffset.width,
-                                              y: endPoint.y + dragOffset.height))
+                            .position(CGPoint(x: endPoint.x + dragOffset.width, y: endPoint.y + dragOffset.height))
                             .gesture(
                                 DragGesture()
                                     .onChanged { value in
                                         let shiftHeld = NSEvent.modifierFlags.contains(.shift)
-                                        let newEnd = shiftHeld
-                                            ? snapToRemarkableAngle(from: startPoint, to: value.location)
-                                            : value.location
-                                        layer.content = .arrow(start: startPoint, end: newEnd,
-                                                               color: color, style: style, thickness: thickness)
+                                        let newEnd = shiftHeld ? snapToRemarkableAngle(from: startPoint, to: value.location) : value.location
+                                        layer.content = .arrow(start: startPoint, end: newEnd, color: color, style: style, thickness: thickness)
                                     }
                             )
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
             case .transparent:
                 Canvas { context, size in
                     let squareSize: CGFloat = 10
                     for x in stride(from: 0, to: size.width, by: squareSize) {
                         for y in stride(from: 0, to: size.height, by: squareSize) {
-                            // Alternating pattern background fill logic computation loops
                             let isGray = (Int(x / squareSize) + Int(y / squareSize)) % 2 == 0
                             let rectFrame = CGRect(x: x, y: y, width: squareSize, height: squareSize)
                             context.fill(Path(rectFrame), with: .color(isGray ? Color(nsColor: .lightGray).opacity(0.3) : .white))
                         }
                     }
                 }
-            
+                .allowsHitTesting(false)
+                
             case .drawing(let lines, let color, let thickness):
                 Canvas { context, size in
-                    // Render each user pointer path stroke individually
                     for line in lines {
                         var path = Path()
                         guard let firstPoint = line.first else { continue }
                         path.move(to: firstPoint)
-                        
-                        for point in line.dropFirst() {
-                            path.addLine(to: point)
-                        }
-                        
+                        for point in line.dropFirst() { path.addLine(to: point) }
                         context.stroke(path, with: .color(color.asColor), style: StrokeStyle(lineWidth: thickness, lineCap: .round, lineJoin: .round))
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
                             var updatedLines = lines
-                            
                             if value.translation == .zero {
                                 if let undoManager = undoManager {
-                                    // Deep copy configuration snapshot backup for flawless undo tracking
                                     let previousConfiguration = lines
                                     undoManager.registerUndo(withTarget: undoManager) { _ in
                                         layer.content = .drawing(lines: previousConfiguration, color: color, thickness: thickness)
@@ -263,7 +234,6 @@ struct LayerElementView: View {
                                     updatedLines[lastLineIndex].append(value.location)
                                 }
                             }
-                            
                             layer.content = .drawing(lines: updatedLines, color: color, thickness: thickness)
                         }
                 )
@@ -304,4 +274,17 @@ struct LayerElementView: View {
             y: anchor.y + length * sin(snappedRad)
         )
     }
+}
+
+struct StrokeShape: Shape {
+    var path: Path
+    var lineWidth: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        return path.cgPath.copy(strokingWithWidth: lineWidth, lineCap: .round, lineJoin: .round, miterLimit: 1).toPath()
+    }
+}
+
+extension CGPath {
+    func toPath() -> Path { Path(self) }
 }

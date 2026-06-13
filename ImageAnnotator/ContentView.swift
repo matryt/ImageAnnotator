@@ -10,7 +10,7 @@ import UniformTypeIdentifiers
 import Combine
 
 struct ContentView: View {
-    @StateObject private var manager = ProjectManager()
+    @StateObject private var manager = ProjectManager(canvasProject: CanvasProject(width: 800, height: 600, layers: []))
     @Environment(\.undoManager) var undoManager
     
     @State private var startX: CGFloat = 0
@@ -59,8 +59,10 @@ struct ContentView: View {
                         )
                     }
                     
-                    manager.registerStateForUndo(undoManager: undoManager, previousState: manager.layers)
-                    manager.layers.append(backgroundLayer)
+                    // Initialisation propre du modèle via le manager
+                    let canvasProject = CanvasProject(width: canvasWidth, height: canvasHeight, layers: [backgroundLayer])
+                    manager.canvasProject = canvasProject
+                    
                     isProjectInitialized = true
                 }
                 .buttonStyle(.borderedProminent)
@@ -83,7 +85,8 @@ struct ContentView: View {
         } else {
             // --- MAIN EDITOR WORKSPACE VIEW ---
             HStack(spacing: 0) {
-                SidebarView(layers: $manager.layers, selectedIndex: $selectedLayerIndex)
+                // Utilisation sécurisée du binding vers les couches du projet encapsulé
+                SidebarView(layers: $manager.canvasProject.layers, selectedIndex: $selectedLayerIndex)
                 
                 Divider()
                 
@@ -91,14 +94,11 @@ struct ContentView: View {
                     ZStack {
                         Color(nsColor: .windowBackgroundColor)
                         
-                        // Render extracted modular canvas view
                         DrawingCanvasView(
                             manager: manager,
                             undoManager: undoManager,
                             startX: $startX,
-                            startY: $startY,
-                            canvasWidth: canvasWidth,
-                            canvasHeight: canvasHeight
+                            startY: $startY
                         )
                         .shadow(radius: 8)
                     }
@@ -155,7 +155,7 @@ struct ContentView: View {
                     }
                 }
                 
-                let currentProjectWidth = manager.layers.first?.width ?? CGFloat(canvasWidth)
+                let currentProjectWidth = CGFloat(canvasWidth)
                 let maxCanvasLimit = currentProjectWidth * 0.7
                 
                 if initialWidth > maxCanvasLimit {
@@ -163,11 +163,11 @@ struct ContentView: View {
                     initialHeight = initialWidth / ratio
                 }
                 
-                let centerX = (manager.layers.first?.width ?? CGFloat(canvasWidth)) / 2
-                let centerY = (manager.layers.first?.height ?? CGFloat(canvasHeight)) / 2
+                let centerX = CGFloat(canvasWidth / 2)
+                let centerY = CGFloat(canvasHeight / 2)
                 
-                manager.registerStateForUndo(undoManager: undoManager, previousState: manager.layers)
-                manager.layers.append(Layer(
+                manager.registerStateForUndo(undoManager: undoManager, previousState: manager.getLayers())
+                manager.canvasProject.layers.append(Layer(
                     name: url.lastPathComponent,
                     x: centerX,
                     y: centerY,
@@ -185,28 +185,23 @@ struct ContentView: View {
             manager: manager,
             undoManager: undoManager,
             startX: $startX,
-            startY: $startY,
-            canvasWidth: canvasWidth,
-            canvasHeight: canvasHeight
+            startY: $startY
         )
-        .frame(
-            width: manager.layers.first?.width ?? CGFloat(canvasWidth),
-            height: manager.layers.first?.height ?? CGFloat(canvasHeight)
-        )
+        .frame(width: CGFloat(canvasWidth), height: CGFloat(canvasHeight))
         
-        let backgroundLayerIndex = manager.layers.firstIndex(where: { $0.name == "Arrière-plan" })
+        let backgroundLayerIndex = manager.getLayers().firstIndex(where: { $0.name == "Arrière-plan" })
         var isBackgroundTransparent = false
             
         if let index = backgroundLayerIndex {
-            if case .transparent = manager.layers[index].content {
+            if case .transparent = manager[index].content {
                 isBackgroundTransparent = true
             }
         }
         
-        let originalVisibility = backgroundLayerIndex != nil ? (manager.layers[backgroundLayerIndex!].isVisible ?? true) : true
+        let originalVisibility = backgroundLayerIndex != nil ? (manager[backgroundLayerIndex!].isVisible ?? true) : true
         
         if let index = backgroundLayerIndex, isBackgroundTransparent {
-            manager.layers[index].isVisible = false
+            manager.canvasProject.layers[index].isVisible = false
         }
         
         let savePanel = NSSavePanel()
@@ -215,9 +210,7 @@ struct ContentView: View {
         savePanel.title = "Exporter le schéma"
         
         if savePanel.runModal() == .OK, let url = savePanel.url {
-            
             if url.pathExtension.lowercased() == "pdf" {
-                
                 let pdfRenderer = ImageRenderer(content: drawingCanvas)
                 pdfRenderer.render { size, context in
                     var box = CGRect(origin: .zero, size: size)
@@ -243,7 +236,7 @@ struct ContentView: View {
         }
         
         if let index = backgroundLayerIndex, isBackgroundTransparent {
-            manager.layers[index].isVisible = originalVisibility
+            manager.canvasProject.layers[index].isVisible = originalVisibility
         }
     }
     
@@ -253,7 +246,7 @@ struct ContentView: View {
         savePanel.nameFieldStringValue = "mon_projet.json"
         
         if savePanel.runModal() == .OK, let url = savePanel.url {
-            if let data = try? JSONEncoder().encode(manager.layers) {
+            if let data = try? JSONEncoder().encode(manager.canvasProject) {
                 try? data.write(to: url)
             }
         }
@@ -266,8 +259,11 @@ struct ContentView: View {
         
         if openPanel.runModal() == .OK, let url = openPanel.url {
             if let data = try? Data(contentsOf: url),
-               let loadedLayers = try? JSONDecoder().decode([Layer].self, from: data) {
-                self.manager.layers = loadedLayers
+               let loadedProject = try? JSONDecoder().decode(CanvasProject.self, from: data) {
+                // Chargement des données géométriques au niveau global
+                self.canvasWidth = loadedProject.width
+                self.canvasHeight = loadedProject.height
+                self.manager.canvasProject = loadedProject
                 self.isProjectInitialized = true
             }
         }
@@ -310,17 +306,17 @@ struct ContentView: View {
                     undoManager.removeAllActions()
                 }
                 
-                manager.layers = [backgroundImageLayer]
+                let canvasProject = CanvasProject(width: Double(initialWidth), height: Double(initialHeight), layers: [backgroundImageLayer])
+                manager.canvasProject = canvasProject
                 self.isProjectInitialized = true
             }
         }
     }
     
-
     private func copySelectedLayer() {
-        guard let index = selectedLayerIndex, manager.layers.indices.contains(index) else { return }
+        guard let index = selectedLayerIndex, manager.getLayers().indices.contains(index) else { return }
         
-        if let data = try? JSONEncoder().encode(manager.layers[index]),
+        if let data = try? JSONEncoder().encode(manager[index]),
            let layerCopy = try? JSONDecoder().decode(Layer.self, from: data) {
             manager.clipboardLayer = layerCopy
         }
@@ -338,70 +334,64 @@ struct ContentView: View {
             newLayer.id = UUID()
             
             if let undoManager = undoManager {
-                let currentState = manager.layers
+                let currentState = manager.getLayers()
                 undoManager.registerUndo(withTarget: undoManager) { _ in
-                    manager.layers = currentState
+                    manager.canvasProject.layers = currentState
                 }
             }
             
-            manager.layers.append(newLayer)
-            selectedLayerIndex = manager.layers.count - 1
+            manager.canvasProject.layers.append(newLayer)
+            selectedLayerIndex = manager.getLayers().count - 1
         }
     }
 
     private func cutSelectedLayer() {
         copySelectedLayer()
         
-        guard let index = selectedLayerIndex, manager.layers.indices.contains(index) else { return }
+        guard let index = selectedLayerIndex, manager.getLayers().indices.contains(index) else { return }
         
         if let undoManager = undoManager {
-            let currentState = manager.layers
+            let currentState = manager.getLayers()
             undoManager.registerUndo(withTarget: undoManager) { _ in
-                manager.layers = currentState
+                manager.canvasProject.layers = currentState
             }
         }
         
-        manager.layers.remove(at: index)
+        manager.canvasProject.layers.remove(at: index)
         selectedLayerIndex = nil
     }
     
     @MainActor
     private func copyImageToClipboard() {
-        // 1. On instancie la vue du canevas pour le rendu
         let sourceCanvas = DrawingCanvasView(
             manager: manager,
             undoManager: undoManager,
             startX: $startX,
-            startY: $startY,
-            canvasWidth: canvasWidth,
-            canvasHeight: canvasHeight
+            startY: $startY
         )
-        .frame(
-            width: manager.layers.first?.width ?? CGFloat(canvasWidth),
-            height: manager.layers.first?.height ?? CGFloat(canvasHeight)
-        )
+        .frame(width: CGFloat(canvasWidth), height: CGFloat(canvasHeight))
             
         let renderer = ImageRenderer(content: sourceCanvas)
         renderer.scale = 2.0
         
-        let backgroundLayerIndex = manager.layers.firstIndex(where: { $0.name == "Arrière-plan" })
+        let backgroundLayerIndex = manager.getLayers().firstIndex(where: { $0.name == "Arrière-plan" })
         var isBackgroundTransparent = false
         
         if let index = backgroundLayerIndex {
-            if case .transparent = manager.layers[index].content {
+            if case .transparent = manager[index].content {
                 isBackgroundTransparent = true
             }
         }
         
-        let originalVisibility = backgroundLayerIndex != nil ? (manager.layers[backgroundLayerIndex!].isVisible ?? true) : true
+        let originalVisibility = backgroundLayerIndex != nil ? (manager[backgroundLayerIndex!].isVisible ?? true) : true
         
         if let index = backgroundLayerIndex, isBackgroundTransparent {
-            manager.layers[index].isVisible = false
+            manager.canvasProject.layers[index].isVisible = false
         }
         
         if let nsImage = renderer.nsImage {
             if let index = backgroundLayerIndex, isBackgroundTransparent {
-                manager.layers[index].isVisible = originalVisibility
+                manager.canvasProject.layers[index].isVisible = originalVisibility
             }
             
             let pasteboard = NSPasteboard.general
@@ -410,7 +400,7 @@ struct ContentView: View {
             
         } else {
             if let index = backgroundLayerIndex, isBackgroundTransparent {
-                manager.layers[index].isVisible = originalVisibility
+                manager.canvasProject.layers[index].isVisible = originalVisibility
             }
         }
     }

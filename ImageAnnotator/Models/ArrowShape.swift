@@ -13,7 +13,6 @@ struct ArrowShape: Shape {
     var arrowStyle: ArrowStyle
     var thickness: CGFloat
     
-    // Allows SwiftUI to animate vector point translations smoothly
     var animatableData: AnimatablePair<CGPoint.AnimatableData, CGPoint.AnimatableData> {
         get { AnimatablePair(start.animatableData, end.animatableData) }
         set {
