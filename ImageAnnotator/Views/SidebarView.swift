@@ -13,7 +13,7 @@ struct SidebarView: View {
     @Environment(\.undoManager) var undoManager
     
     @State private var showOptionsSheet = false
-    @State private var preSheetConfiguration: [Layer] = [] // Keeps a backup configuration of the source state before sheet changes
+    @State private var preSheetConfiguration: [Layer] = []
     
     var body: some View {
         VStack(spacing: 15) {
@@ -24,7 +24,7 @@ struct SidebarView: View {
             VStack {
                 HStack {
                     Button(action: {
-                        let newRectangle = Layer(name: "Rectangle \(layers.count + 1)", x: 200, y: 200, width: 150, height: 150, content: .rectangle(color: CodableColor(.blue.opacity(0.5)), isFilled: true, strokeThickness: 1))
+                        let newRectangle = Layer(name: "Rectangle \(layers.count + 1)", x: 200, y: 200, width: 150, height: 200, content: .rectangle(color: CodableColor(.blue), isFilled: true, strokeThickness: 1))
                         registerGlobalStateForUndo()
                         layers.append(newRectangle)
                     }) {

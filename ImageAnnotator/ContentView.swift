@@ -194,12 +194,9 @@ struct ContentView: View {
             height: manager.layers.first?.height ?? CGFloat(canvasHeight)
         )
         
-        let renderer = ImageRenderer(content: drawingCanvas)
-        renderer.scale = 2.0
-        
         let backgroundLayerIndex = manager.layers.firstIndex(where: { $0.name == "Arrière-plan" })
         var isBackgroundTransparent = false
-        
+            
         if let index = backgroundLayerIndex {
             if case .transparent = manager.layers[index].content {
                 isBackgroundTransparent = true
@@ -212,25 +209,41 @@ struct ContentView: View {
             manager.layers[index].isVisible = false
         }
         
-        if let nsImage = renderer.nsImage {
-            if let index = backgroundLayerIndex, isBackgroundTransparent {
-                manager.layers[index].isVisible = originalVisibility
-            }
-            let savePanel = NSSavePanel()
-            savePanel.allowedContentTypes = [.png]
-            savePanel.nameFieldStringValue = "mon_annotation.png"
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.png, .pdf]
+        savePanel.nameFieldStringValue = "mon_schema.png"
+        savePanel.title = "Exporter le schéma"
+        
+        if savePanel.runModal() == .OK, let url = savePanel.url {
             
-            if savePanel.runModal() == .OK, let url = savePanel.url {
-                if let tiffData = nsImage.tiffRepresentation,
-                   let bitmapRep = NSBitmapImageRep(data: tiffData),
-                   let pngData = bitmapRep.representation(using: .png, properties: [:]) {
-                    try? pngData.write(to: url)
+            if url.pathExtension.lowercased() == "pdf" {
+                
+                let pdfRenderer = ImageRenderer(content: drawingCanvas)
+                pdfRenderer.render { size, context in
+                    var box = CGRect(origin: .zero, size: size)
+                    guard let cgContext = CGContext(url as CFURL, mediaBox: &box, nil) else { return }
+                    
+                    cgContext.beginPDFPage(nil)
+                    context(cgContext)
+                    cgContext.endPDFPage()
+                    cgContext.closePDF()
+                }
+            } else {
+                let renderer = ImageRenderer(content: drawingCanvas)
+                renderer.scale = 2.0
+                
+                if let nsImage = renderer.nsImage {
+                    if let tiffData = nsImage.tiffRepresentation,
+                       let bitmapRep = NSBitmapImageRep(data: tiffData),
+                       let pngData = bitmapRep.representation(using: .png, properties: [:]) {
+                        try? pngData.write(to: url)
+                    }
                 }
             }
-        } else {
-            if let index = backgroundLayerIndex, isBackgroundTransparent {
-                manager.layers[index].isVisible = originalVisibility
-            }
+        }
+        
+        if let index = backgroundLayerIndex, isBackgroundTransparent {
+            manager.layers[index].isVisible = originalVisibility
         }
     }
     

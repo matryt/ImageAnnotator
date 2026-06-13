@@ -30,29 +30,30 @@ struct DrawingCanvasView: View {
                             LayerElementView(layer: $manager.layers[index])
                                 .position(x: manager.layers[index].x, y: manager.layers[index].y)
                                 .gesture(
-                                    DragGesture()
-                                        .onChanged { gesture in
-                                            if startX == 0 && startY == 0 {
-                                                // Capture history state on first click pointer interaction
-                                                manager.registerStateForUndo(undoManager: undoManager, previousState: manager.layers)
-                                                startX = manager.layers[index].x
-                                                startY = manager.layers[index].y
+                                    index == 0 ? nil :
+                                        DragGesture()
+                                            .onChanged { gesture in
+                                                if startX == 0 && startY == 0 {
+                                                    // Capture history state on first click pointer interaction
+                                                    manager.registerStateForUndo(undoManager: undoManager, previousState: manager.layers)
+                                                    startX = manager.layers[index].x
+                                                    startY = manager.layers[index].y
+                                                }
+                                                
+                                                let limitX = manager.layers.first?.width ?? CGFloat(canvasWidth)
+                                                let limitY = manager.layers.first?.height ?? CGFloat(canvasHeight)
+                                                
+                                                let targetX = startX + gesture.translation.width
+                                                let targetY = startY + gesture.translation.height
+                                                
+                                                // Update properties directly on the observable object reference
+                                                manager.layers[index].x = max(0, min(targetX, limitX))
+                                                manager.layers[index].y = max(0, min(targetY, limitY))
                                             }
-                                            
-                                            let limitX = manager.layers.first?.width ?? CGFloat(canvasWidth)
-                                            let limitY = manager.layers.first?.height ?? CGFloat(canvasHeight)
-                                            
-                                            let targetX = startX + gesture.translation.width
-                                            let targetY = startY + gesture.translation.height
-                                            
-                                            // Update properties directly on the observable object reference
-                                            manager.layers[index].x = max(0, min(targetX, limitX))
-                                            manager.layers[index].y = max(0, min(targetY, limitY))
-                                        }
-                                        .onEnded { _ in
-                                            startX = 0
-                                            startY = 0
-                                        }
+                                            .onEnded { _ in
+                                                startX = 0
+                                                startY = 0
+                                            }
                                 )
                         }
                     } else {
