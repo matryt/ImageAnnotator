@@ -14,62 +14,28 @@ struct LayerElementView: View {
     
     @Environment(\.undoManager) var undoManager
     
+    // Repère d'origine pur : la forme occupe tout son espace, c'est le masque qui la tranchera
+    private var nativePathRect: CGRect {
+        return CGRect(x: 0, y: 0, width: layer.width, height: layer.height)
+    }
+    
     var body: some View {
         ZStack {
             switch layer.content {
             case .rectangle(let color, let isFilled, let strokeThickness):
                 ZStack(alignment: .bottomTrailing) {
                     if isFilled {
-                        Rectangle()
-                            .foregroundStyle(color.asColor)
-                            .frame(width: layer.width, height: layer.height)
-                            .opacity(layer.opacity ?? 1)
+                        Path { path in
+                            path.addRect(nativePathRect)
+                        }
+                        .fill(color.asColor)
+                        .opacity(layer.opacity ?? 1)
                     } else {
-                        Rectangle()
-                            .stroke(color.asColor, lineWidth: strokeThickness)
-                            .frame(width: layer.width, height: layer.height)
-                            .opacity(layer.opacity ?? 1)
-                    }
-                    
-                    if isEditing {
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 20, height: 20)
-                            .offset(x: 6, y: 6) // Aligne pile sur le coin
-                            .gesture(
-                                DragGesture()
-                                    .onChanged { value in
-                                        // On calcule la nouvelle taille selon le déplacement de la souris
-                                        let newWidth = max(20, layer.width + value.translation.width)
-                                        let newHeight = max(20, layer.height + value.translation.height)
-                                        
-                                        // Si c'est un carré parfait (largeur == hauteur), on applique la même valeur
-                                        if layer.width == layer.height {
-                                            layer.width = newWidth
-                                            layer.height = newWidth
-                                        } else {
-                                            layer.width = newWidth
-                                            layer.height = newHeight
-                                        }
-                                    }
-                            )
-                    }
-                }
-                .contentShape(Rectangle())
-                .onTapGesture { isEditing.toggle() }
-                
-            case .circle(let color, let isFilled, let strokeThickness):
-                ZStack(alignment: .bottomTrailing) {
-                    if isFilled {
-                        Ellipse()
-                            .foregroundStyle(color.asColor)
-                            .frame(width: layer.width, height: layer.height)
-                            .opacity(layer.opacity ?? 1)
-                    } else {
-                        Ellipse()
-                            .stroke(color.asColor, lineWidth: strokeThickness)
-                            .frame(width: layer.width, height: layer.height)
-                            .opacity(layer.opacity ?? 1)
+                        Path { path in
+                            path.addRect(nativePathRect)
+                        }
+                        .stroke(color.asColor, lineWidth: strokeThickness)
+                        .opacity(layer.opacity ?? 1)
                     }
                     
                     if isEditing {
@@ -81,61 +47,79 @@ struct LayerElementView: View {
                                 DragGesture()
                                     .onChanged { value in
                                         let newWidth = max(20, layer.width + value.translation.width)
-                                        let newHeight = max(20, layer.height + value.translation.height)
-                                        
-                                        if layer.width == layer.height {
-                                            layer.width = newWidth
-                                            layer.height = newWidth
-                                        } else {
-                                            layer.width = newWidth
-                                            layer.height = newHeight
-                                        }
+                                        let heightShift = layer.width == layer.height ? newWidth : max(20, layer.height + value.translation.height)
+                                        layer.width = newWidth
+                                        layer.height = heightShift
                                     }
                             )
                     }
                 }
+                .frame(width: layer.width, height: layer.height)
+                .contentShape(Rectangle())
+                .onTapGesture { isEditing.toggle() }
+                
+            case .circle(let color, let isFilled, let strokeThickness):
+                ZStack(alignment: .bottomTrailing) {
+                    if isFilled {
+                        Path { path in
+                            path.addEllipse(in: nativePathRect)
+                        }
+                        .fill(color.asColor)
+                        .opacity(layer.opacity ?? 1)
+                    } else {
+                        Path { path in
+                            path.addEllipse(in: nativePathRect)
+                        }
+                        .stroke(color.asColor, lineWidth: strokeThickness)
+                        .opacity(layer.opacity ?? 1)
+                    }
+                    
+                    if isEditing {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 20, height: 20)
+                            .offset(x: 6, y: 6)
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        let newWidth = max(20, layer.width + value.translation.width)
+                                        let heightShift = layer.width == layer.height ? newWidth : max(20, layer.height + value.translation.height)
+                                        layer.width = newWidth
+                                        layer.height = heightShift
+                                    }
+                            )
+                    }
+                }
+                .frame(width: layer.width, height: layer.height)
                 .contentShape(Rectangle())
                 .onTapGesture { isEditing.toggle() }
                 
             case .text(let textContent, let color, let size, let fontName):
                 if isEditing {
-                    // 1. Dynamically create a runtime Binding for the text field input stream mapping
                     let textBinding = Binding(
                         get: { textContent },
                         set: { layer.content = .text(text: $0, color: color, size: size, font: fontName) }
                     )
-                    
-                    // 2. Render input TextField directly on top of the graphics layer coordinates
-                    TextField("", text: textBinding, onCommit: {
-                        isEditing = false // Commit edits on carriage return hit action
-                    })
-                    .textFieldStyle(.plain) // Remove native boundaries borders to keep a clean look
-                    .font(.custom(fontName, size: size))
-                    .foregroundStyle(color.asColor)
-                    .frame(width: layer.width)
-                    
+                    TextField("", text: textBinding, onCommit: { isEditing = false })
+                        .textFieldStyle(.plain)
+                        .font(.custom(fontName, size: size))
+                        .foregroundStyle(color.asColor)
+                        .frame(width: layer.width)
                 } else {
-                    // 3. Static read-only rendering block viewport state
                     Text(textContent)
                         .font(.custom(fontName, size: size))
                         .foregroundStyle(color.asColor)
                         .opacity(layer.opacity ?? 1)
-                        .onTapGesture(count: 2) {
-                            isEditing = true
-                        }
+                        .onTapGesture(count: 2) { isEditing = true }
                 }
                 
             case .image(let data, _):
                 if let nsImage = NSImage(data: data) {
-                    let cLeft = layer.cropLeft ?? 0
-                    let cRight = layer.cropRight ?? 0
-                    let cTop = layer.cropTop ?? 0
-                    let cBottom = layer.cropBottom ?? 0
-                    
+                    // L'image s'affiche à 100% de son espace natif stable.
+                    // C'est l'encapsulation de DrawingCanvasView qui la rogne !
                     Image(nsImage: nsImage)
                         .resizable()
                         .scaledToFill()
-                        .offset(x: (cRight - cLeft) / 2, y: (cBottom - cTop) / 2)
                         .frame(width: layer.width, height: layer.height)
                         .clipped()
                         .opacity(layer.opacity ?? 1)
@@ -153,9 +137,7 @@ struct LayerElementView: View {
                     .contentShape(StrokeShape(path: ArrowShape(start: startPoint, end: endPoint, arrowStyle: style, thickness: thickness).path(in: .zero), lineWidth: thickness + 15))
                     .gesture(
                         DragGesture()
-                            .onChanged { value in
-                                dragOffset = value.translation
-                            }
+                            .onChanged { value in dragOffset = value.translation }
                             .onEnded { value in
                                 let finalStart = CGPoint(x: startPoint.x + value.translation.width, y: startPoint.y + value.translation.height)
                                 let finalEnd   = CGPoint(x: endPoint.x   + value.translation.width, y: endPoint.y   + value.translation.height)
@@ -164,7 +146,7 @@ struct LayerElementView: View {
                             }
                     )
                     .onTapGesture { isEditing.toggle() }
-    
+                    
                     if isEditing {
                         Circle()
                             .fill(Color.blue)
@@ -241,17 +223,12 @@ struct LayerElementView: View {
         }
     }
     
-    // --- APP SECURITY DATA SCOPE HANDLING METHODS ---
     private func loadImageFromBookmark(bookmarkData: Data) -> NSImage? {
         var isStale = false
-        guard let url = try? URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) else {
-            return nil
-        }
-        
+        guard let url = try? URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) else { return nil }
         let hasAccess = url.startAccessingSecurityScopedResource()
         let imageResult = NSImage(contentsOf: url)
         if hasAccess { url.stopAccessingSecurityScopedResource() }
-        
         return imageResult
     }
     
@@ -260,19 +237,12 @@ struct LayerElementView: View {
         let dy = free.y - anchor.y
         let length = sqrt(dx * dx + dy * dy)
         guard length > 0 else { return free }
-        
         let angleRad = atan2(dy, dx)
         let angleDeg = angleRad * 180 / .pi
-        
-        // Angles remarquables tous les 45°
         let step = 45.0
         let snappedDeg = (angleDeg / step).rounded() * step
         let snappedRad = snappedDeg * .pi / 180
-        
-        return CGPoint(
-            x: anchor.x + length * cos(snappedRad),
-            y: anchor.y + length * sin(snappedRad)
-        )
+        return CGPoint(x: anchor.x + length * cos(snappedRad), y: anchor.y + length * sin(snappedRad))
     }
 }
 

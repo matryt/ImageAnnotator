@@ -12,6 +12,13 @@ struct SidebarView: View {
     @Binding var selectedIndex: Int?
     @Environment(\.undoManager) var undoManager
     
+    // Ajout des bindings pour le système de Crop
+    @Binding var isCropModeActive: Bool
+    @Binding var cropTargetAll: Bool
+    
+    var onValidateCrop: () -> Void
+    var onCancelCrop: () -> Void
+    
     @State private var showOptionsSheet = false
     @State private var preSheetConfiguration: [Layer] = []
     
@@ -21,79 +28,132 @@ struct SidebarView: View {
                 .font(.headline)
                 .padding(.top)
             
-            VStack {
-                HStack {
-                    Button(action: {
-                        let newRectangle = Layer(name: "Rectangle \(layers.count + 1)", x: 200, y: 200, width: 150, height: 200, content: .rectangle(color: CodableColor(.blue), isFilled: true, strokeThickness: 1))
-                        registerGlobalStateForUndo()
-                        layers.append(newRectangle)
-                    }) {
-                        Image(systemName: "square.dashed")
-                        Text("Rectangle")
-                    }
-                    
-                    Button(action: {
-                        let newText = Layer(name: "Texte \(layers.count + 1)", x: 180, y: 180, width: 200, height: 50, content: .text(text: "Nouveau Texte", color: CodableColor(.black), size: 20, font: "Helvetica"))
-                        registerGlobalStateForUndo()
-                        layers.append(newText)
-                    }) {
-                        Image(systemName: "text.alignleft")
-                        Text("Texte")
-                    }
-                }
-                .padding(.horizontal)
-                .buttonStyle(.bordered)
-                
-                HStack {
-                    Button(action: {
-                        let newArrow = Layer(
-                            name: "Flèche \(layers.count + 1)",
-                            x: 0, y: 0, width: 0, height: 0,
-                            content: .arrow(start: CGPoint(x: 100, y: 100), end: CGPoint(x: 250, y: 100), color: CodableColor(.gray), style: .end, thickness: 10)
-                        )
-                        registerGlobalStateForUndo()
-                        layers.append(newArrow)
-                    }) {
-                        Image(systemName: "arrow.up.forward")
-                        Text("Flèche")
-                    }
-                    
-                    Button(action: {
-                        let newCircle = Layer(
-                            name: "Cercle \(layers.count + 1)",
-                            x: 150, y: 150, width: 100, height: 100,
-                            content: .circle(color: CodableColor(.blue), isFilled: true, strokeThickness: 1)
-                        )
-                        registerGlobalStateForUndo()
-                        layers.append(newCircle)
-                    }) {
-                        Image(systemName: "circle")
-                        Text("Cercle")
-                    }
-                }
-                
-                HStack {
-                    Button(action: {
-                        let maxWidth = layers.first?.width ?? 800
-                        let maxHeight = layers.first?.height ?? 600
+            VStack(spacing: 10) {
+                if isCropModeActive {
+                    // Panneau contextuel de validation
+                    VStack(spacing: 8) {
+                        Text(cropTargetAll ? "Recadrage global de la zone" : "Coupure ciblée du calque")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                            .bold()
                         
-                        let newDrawing = Layer(
-                            name: "Dessin \(layers.count + 1)",
-                            x: maxWidth / 2,
-                            y: maxHeight / 2,
-                            width: maxWidth,
-                            height: maxHeight,
-                            content: .drawing(lines: [], color: CodableColor(.red), thickness: 4)
-                        )
-                        registerGlobalStateForUndo()
-                        layers.append(newDrawing)
-                    }) {
-                        Image(systemName: "scribble")
-                        Text("Dessin libre")
+                        HStack {
+                            Button(action: onValidateCrop) {
+                                Label("Valider", systemImage: "checkmark.circle.fill")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.green)
+                            
+                            Button(action: onCancelCrop) {
+                                Label("Annuler", systemImage: "xmark.circle.fill")
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.red)
+                        }
                     }
+                    .padding(8)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .cornerRadius(8)
+                    .padding(.horizontal)
+                } else {
+                    HStack {
+                        Button(action: {
+                            let newRectangle = Layer(name: "Rectangle \(layers.count + 1)", x: 200, y: 200, width: 150, height: 200, content: .rectangle(color: CodableColor(.blue), isFilled: true, strokeThickness: 1))
+                            registerGlobalStateForUndo()
+                            layers.append(newRectangle)
+                        }) {
+                            Image(systemName: "square.dashed")
+                            Text("Rectangle")
+                        }
+                        
+                        Button(action: {
+                            let newText = Layer(name: "Texte \(layers.count + 1)", x: 180, y: 180, width: 200, height: 50, content: .text(text: "Nouveau Texte", color: CodableColor(.black), size: 20, font: "Helvetica"))
+                            registerGlobalStateForUndo()
+                            layers.append(newText)
+                        }) {
+                            Image(systemName: "text.alignleft")
+                            Text("Texte")
+                        }
+                    }
+                    .padding(.horizontal)
+                    .buttonStyle(.bordered)
+                    
+                    HStack {
+                        Button(action: {
+                            let newArrow = Layer(
+                                name: "Flèche \(layers.count + 1)",
+                                x: 0, y: 0, width: 0, height: 0,
+                                content: .arrow(start: CGPoint(x: 100, y: 100), end: CGPoint(x: 250, y: 100), color: CodableColor(.gray), style: .end, thickness: 10)
+                            )
+                            registerGlobalStateForUndo()
+                            layers.append(newArrow)
+                        }) {
+                            Image(systemName: "arrow.up.forward")
+                            Text("Flèche")
+                        }
+                        
+                        Button(action: {
+                            let newCircle = Layer(
+                                name: "Cercle \(layers.count + 1)",
+                                x: 150, y: 150, width: 100, height: 100,
+                                content: .circle(color: CodableColor(.blue), isFilled: true, strokeThickness: 1)
+                            )
+                            registerGlobalStateForUndo()
+                            layers.append(newCircle)
+                        }) {
+                            Image(systemName: "circle")
+                            Text("Cercle")
+                        }
+                    }
+                    .padding(.horizontal)
+                    .buttonStyle(.bordered)
+                    
+                    HStack {
+                        Button(action: {
+                            let maxWidth = layers.first?.width ?? 800
+                            let maxHeight = layers.first?.height ?? 600
+                            
+                            let newDrawing = Layer(
+                                name: "Dessin \(layers.count + 1)",
+                                x: maxWidth / 2,
+                                y: maxHeight / 2,
+                                width: maxWidth,
+                                height: maxHeight,
+                                content: .drawing(lines: [], color: CodableColor(.red), thickness: 4)
+                            )
+                            registerGlobalStateForUndo()
+                            layers.append(newDrawing)
+                        }) {
+                            Image(systemName: "scribble")
+                            Text("Dessin libre")
+                        }
+                    }
+                    .padding(.horizontal)
+                    .buttonStyle(.bordered)
+                    
+                    // Boutons de déclenchement des ciseaux
+                    VStack(spacing: 5) {
+                        Button(action: {
+                            cropTargetAll = true
+                            isCropModeActive = true
+                        }) {
+                            Label("Recadrer le projet global", systemImage: "crop")
+                        }
+                        .buttonStyle(.bordered)
+                        
+                        if selectedIndex != nil && selectedIndex != layers.firstIndex(where: { $0.name == "Arrière-plan" }) {
+                            Button(action: {
+                                cropTargetAll = false
+                                isCropModeActive = true
+                            }) {
+                                Label("Découper ce calque", systemImage: "scissors")
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.orange)
+                        }
+                    }
+                    .padding(.top, 5)
                 }
-                .padding(.horizontal)
-                .buttonStyle(.bordered)
             }
             
             Divider()
@@ -118,7 +178,6 @@ struct SidebarView: View {
                        currentData != initialData {
                         if let undoManager = undoManager {
                             let historyCopy = preSheetConfiguration
-                            
                             undoManager.registerUndo(withTarget: NSApp) { _ in
                                 self.layers = historyCopy
                             }

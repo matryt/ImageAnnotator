@@ -28,6 +28,11 @@ struct ContentView: View {
     @State private var zoomOffset: CGSize = .zero // Permet de déplacer le canevas quand on est zoomé
     @State private var dragBaseOffset: CGSize = .zero
     
+    // --- ETATS DE GESTION DU ROGNAGE VECTORIEL BÉZIER ---
+    @State private var isCropModeActive = false
+    @State private var cropSelectionRect = CGRect.zero
+    @State private var cropTargetAll = true
+    
     var body: some View {
         if !isProjectInitialized {
             // --- WELCOME & SETUP INITIAL VIEW ---
@@ -90,7 +95,14 @@ struct ContentView: View {
             // --- MAIN EDITOR WORKSPACE VIEW ---
             HStack(spacing: 0) {
                 // Utilisation sécurisée du binding vers les couches du projet encapsulé
-                SidebarView(layers: $manager.canvasProject.layers, selectedIndex: $selectedLayerIndex)
+                SidebarView(
+                    layers: $manager.canvasProject.layers,
+                    selectedIndex: $selectedLayerIndex,
+                    isCropModeActive: $isCropModeActive,
+                    cropTargetAll: $cropTargetAll,
+                    onValidateCrop: { validateAndExecuteCrop() },
+                    onCancelCrop: { cancelCropMode() }
+                )
                 
                 Divider()
                 
@@ -102,7 +114,10 @@ struct ContentView: View {
                             manager: manager,
                             undoManager: undoManager,
                             startX: $startX,
-                            startY: $startY
+                            startY: $startY,
+                            isCropModeActive: $isCropModeActive,
+                            cropSelectionRect: $cropSelectionRect,
+                            cropTargetAll: $cropTargetAll
                         )
                         .shadow(radius: 8)
                         .scaleEffect(zoomScale)
@@ -126,6 +141,15 @@ struct ContentView: View {
                     }
                     .contentShape(Rectangle())
                     .clipped()
+                    .background(
+                        Group {
+                            if isCropModeActive {
+                                Button(action: { cancelCropMode() }) {}
+                                .keyboardShortcut(.escape, modifiers: [])
+                                .buttonStyle(.borderless)
+                            }
+                        }
+                    )
                 }
             }
             // Application system notification events listeners
@@ -173,6 +197,107 @@ struct ContentView: View {
                 }
             )
         }
+    }
+
+    // --- LOGIQUE METIER : DECOUPE STYLE PHOTOFILTRE ---
+    
+    private func cancelCropMode() {
+        isCropModeActive = false
+        cropSelectionRect = .zero
+    }
+    
+    private func validateAndExecuteCrop() {
+        if cropTargetAll {
+            applyGlobalCanvasCrop()
+        } else {
+            applyLayerChirurgicalCrop()
+        }
+    }
+    
+    private func applyGlobalCanvasCrop() {
+        guard cropSelectionRect.width > 10 && cropSelectionRect.height > 10 else { return }
+        manager.registerStateForUndo(undoManager: undoManager, previousState: manager.getLayers())
+        
+        let cropBox = cropSelectionRect
+        let deltaX = cropBox.minX
+        let deltaY = cropBox.minY
+        
+        self.canvasWidth = Double(cropBox.width)
+        self.canvasHeight = Double(cropBox.height)
+        manager.canvasProject.width = Double(cropBox.width)
+        manager.canvasProject.height = Double(cropBox.height)
+        
+        for index in manager.canvasProject.layers.indices {
+            if manager.canvasProject.layers[index].name == "Arrière-plan" {
+                manager.canvasProject.layers[index].width = cropBox.width
+                manager.canvasProject.layers[index].height = cropBox.height
+                manager.canvasProject.layers[index].x = cropBox.width / 2
+                manager.canvasProject.layers[index].y = cropBox.height / 2
+                continue
+            }
+            // Décale tous les calques pour s'aligner sur le nouveau coin (0,0) du projet
+            manager.canvasProject.layers[index].x -= deltaX
+            manager.canvasProject.layers[index].y -= deltaY
+        }
+        cancelCropMode()
+    }
+    
+    private func applyLayerChirurgicalCrop() {
+        guard cropSelectionRect.width > 10 && cropSelectionRect.height > 10,
+              let index = selectedLayerIndex else { return }
+        
+        manager.registerStateForUndo(undoManager: undoManager, previousState: manager.getLayers())
+        
+        let selection = cropSelectionRect
+        let layer = manager.canvasProject.layers[index]
+        
+        switch layer.content {
+        case .arrow(let start, let end, let color, let style, let thickness):
+            // --- CAS DE LA FLÈCHE : Recadrage chirurgical des extrémités ---
+            let newStart = CGPoint(
+                x: max(selection.minX, min(selection.maxX, start.x)),
+                y: max(selection.minY, min(selection.maxY, start.y))
+            )
+            let newEnd = CGPoint(
+                x: max(selection.minX, min(selection.maxX, end.x)),
+                y: max(selection.minY, min(selection.maxY, end.y))
+            )
+            manager.canvasProject.layers[index].content = .arrow(start: newStart, end: newEnd, color: color, style: style, thickness: thickness)
+            
+        case .drawing(let lines, let color, let thickness):
+            // --- CAS DU DESSIN LIBRE : Nettoyage et suppression des segments hors-zone ---
+            var newLines: [[CGPoint]] = []
+            for line in lines {
+                var currentSegment: [CGPoint] = []
+                for point in line {
+                    // On ne garde le point que s'il est à l'intérieur de la boîte de découpe
+                    if selection.contains(point) {
+                        currentSegment.append(point)
+                    } else {
+                        if !currentSegment.isEmpty {
+                            newLines.append(currentSegment)
+                            currentSegment = []
+                        }
+                    }
+                }
+                if !currentSegment.isEmpty {
+                    newLines.append(currentSegment)
+                }
+            }
+            manager.canvasProject.layers[index].content = .drawing(lines: newLines, color: color, thickness: thickness)
+            
+        default:
+            // --- CAS STANDARD (Rectangle, Cercle, Image, Texte) ---
+            let localMinX = selection.minX - (layer.x - layer.width / 2)
+            let localMinY = selection.minY - (layer.y - layer.height / 2)
+            
+            manager.canvasProject.layers[index].cropLeft = max(0, localMinX)
+            manager.canvasProject.layers[index].cropTop = max(0, localMinY)
+            manager.canvasProject.layers[index].cropRight = max(0, layer.width - (localMinX + selection.width))
+            manager.canvasProject.layers[index].cropBottom = max(0, layer.height - (localMinY + selection.height))
+        }
+        
+        cancelCropMode()
     }
 
     // --- ASYNC & FILE MANAGEMENT LOGIC METHOD EXTRACTIONS ---
@@ -228,7 +353,10 @@ struct ContentView: View {
             manager: manager,
             undoManager: undoManager,
             startX: $startX,
-            startY: $startY
+            startY: $startY,
+            isCropModeActive: $isCropModeActive,
+            cropSelectionRect: $cropSelectionRect,
+            cropTargetAll: $cropTargetAll
         )
         .frame(width: CGFloat(canvasWidth), height: CGFloat(canvasHeight))
         
@@ -410,7 +538,10 @@ struct ContentView: View {
             manager: manager,
             undoManager: undoManager,
             startX: $startX,
-            startY: $startY
+            startY: $startY,
+            isCropModeActive: $isCropModeActive,
+            cropSelectionRect: $cropSelectionRect,
+            cropTargetAll: $cropTargetAll
         )
         .frame(width: CGFloat(canvasWidth), height: CGFloat(canvasHeight))
             
