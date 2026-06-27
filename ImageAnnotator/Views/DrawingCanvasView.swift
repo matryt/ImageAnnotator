@@ -74,14 +74,20 @@ struct DrawingCanvasView: View {
                                                     startY = manager[index].y
                                                 }
                                                 
-                                                let limitX = dimensions.width
-                                                let limitY = dimensions.height
+                                                let visibleWidth = max(0, layer.width - cLeft - cRight)
+                                                let visibleHeight = max(0, layer.height - cTop - cBottom)
+                                                
+                                                let minAllowedX = (layer.width / 2) - cLeft
+                                                let maxAllowedX = dimensions.width - visibleWidth + (layer.width / 2) - cLeft
+                                                
+                                                let minAllowedY = (layer.height / 2) - cTop
+                                                let maxAllowedY = dimensions.height - visibleHeight + (layer.height / 2) - cTop
                                                 
                                                 let targetX = startX + gesture.translation.width
                                                 let targetY = startY + gesture.translation.height
                                                 
-                                                manager[index].x = max(0, min(targetX, limitX))
-                                                manager[index].y = max(0, min(targetY, limitY))
+                                                manager[index].x = max(minAllowedX, min(targetX, maxAllowedX))
+                                                manager[index].y = max(minAllowedY, min(targetY, maxAllowedY))
                                             }
                                             .onEnded { _ in
                                                 startX = 0
